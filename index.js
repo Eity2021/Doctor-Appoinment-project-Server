@@ -1,7 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
-
+const jwt = require("jsonwebtoken");
 const { MongoClient, ServerApiVersion } = require("mongodb");
 const app = express();
 const port = process.env.PORT || 8000;
@@ -16,6 +16,22 @@ const client = new MongoClient(uri, {
   useUnifiedTopology: true,
   serverApi: ServerApiVersion.v1,
 });
+
+function verifyJWT(req, res, next) {
+  // console.log('abc');
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return res.status(401).send({ message: "UnAuthorization access" });
+  }
+  const token = authHeader.split(" ")[1];
+  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, function (err, decoded) {
+    if (err) {
+      return res.status(403).send({ message: "Forbidden access" });
+    }
+    req.decoded = decoded;
+    next();
+  });
+}
 
 async function run() {
   try {
@@ -59,13 +75,17 @@ async function run() {
     });
     //bookings get
 
-
-    app.get('/booking' , async(req,res) =>{
+    app.get("/booking", verifyJWT, async (req, res) => {
       const patientEmail = req.query.patientEmail;
-      const query = {patientEmail : patientEmail};
-      const bookings = await bookingCollection.find(query).toArray();
-      res.send(bookings);
-    })
+      const decodedEmail = req.decoded.email;
+      if (patientEmail === decodedEmail) {
+        const query = { patientEmail: patientEmail };
+        const bookings = await bookingCollection.find(query).toArray();
+        res.send(bookings);
+      } else {
+        return res.status(403).send({ message: "Forbidden access" });
+      }
+    });
     //  booking post
     app.post("/booking", async (req, res) => {
       const booking = req.body;
@@ -83,21 +103,45 @@ async function run() {
       return res.send({ success: true, result });
     });
 
-//put 
+    //all user
+    app.get("/user", verifyJWT, async (req, res) => {
+      const users = await usersCollection.find().toArray();
+      res.send(users);
+    });
 
-app.put('/user/:email' , async (req,res) => {
-  const email = req.params.email;
-  const user = req.body;
-  const filter = {email : email};
-  const options = {upsert : true};
-  const updateDoc = {
-    $set : user,
-  };
-  const result = await usersCollection.updateOne(filter,updateDoc,options);
-  res.send(result);
-})
+    //make admin
+    app.put("/user/admin/:email", verifyJWT, async (req, res) => {
+      const email = req.params.email;
+      const filter = { email: email };
+      const updateDoc = {
+        $set: { role: "admin" },
+      };
+      const result = await usersCollection.updateOne(filter, updateDoc);
+      res.send(result);
+    });
 
+    //put per  user
 
+    app.put("/user/:email", async (req, res) => {
+      const email = req.params.email;
+      const user = req.body;
+      const filter = { email: email };
+      const options = { upsert: true };
+      const updateDoc = {
+        $set: user,
+      };
+      const result = await usersCollection.updateOne(
+        filter,
+        updateDoc,
+        options
+      );
+      const token = jwt.sign(
+        { email: email },
+        process.env.ACCESS_TOKEN_SECRET,
+        { expiresIn: "1d" }
+      );
+      res.send({ result, token });
+    });
   } finally {
   }
 }
@@ -109,5 +153,5 @@ app.get("/", (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(`Example app listening on port ${port}`);
+  console.log(`Doctor app listening on port ${port}`);
 });
