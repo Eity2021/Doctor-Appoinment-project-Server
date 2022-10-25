@@ -139,7 +139,7 @@ async function run() {
         filter,
         updatedDoc
       );
-      res.send(updatedBooking);
+      res.send(updatedDoc);
     });
     //  booking post
     app.post("/booking", async (req, res) => {
