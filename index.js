@@ -42,6 +42,9 @@ async function run() {
     const bookingCollection = client.db("Doctor_appoint").collection("booking");
     const usersCollection = client.db("Doctor_appoint").collection("users");
     const doctorCollection = client.db("Doctor_appoint").collection("doctors");
+    const paymentCollection = client
+      .db("Doctor_appoint")
+      .collection("payments");
     //verify admin
     const verifyAdmin = async (req, res, next) => {
       const requester = req.decoded.email;
@@ -106,6 +109,37 @@ async function run() {
       const query = { _id: ObjectId(id) };
       const booking = await bookingCollection.findOne(query);
       res.send(booking);
+    });
+    // payment
+    app.post("/create-payment-intent", verifyJWT, async (req, res) => {
+      const service = req.body;
+      const price = service.price;
+      const amount = price * 100;
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: amount,
+        currency: "usd",
+        payment_method_types: ["card"],
+      });
+      res.send({ clientSecret: paymentIntent.client_secret });
+    });
+    //patch
+    app.patch("/booking/:id", verifyJWT, async (req, res) => {
+      const id = req.params.id;
+      const payment = req.body;
+      const filter = { _id: ObjectId(id) };
+      const updatedDoc = {
+        $set: {
+          paid: true,
+          transactionId: payment.transactionId,
+        },
+      };
+
+      const result = await paymentCollection.insertOne(payment);
+      const updatedBooking = await bookingCollection.updateOne(
+        filter,
+        updatedDoc
+      );
+      res.send(updatedBooking);
     });
     //  booking post
     app.post("/booking", async (req, res) => {
@@ -197,19 +231,6 @@ async function run() {
         { expiresIn: "1d" }
       );
       res.send({ result, token });
-    });
-
-    // payment
-    app.post("/create-payment-intent", verifyJWT, async (req, res) => {
-      const service = req.body;
-      const price = service.price;
-      const amount = price * 100;
-      const paymentIntent = await stripe.paymentIntent.creat({
-        amount: amount,
-        currency: "usd",
-        payment_method_types: ["card"],
-      });
-      res.send({ clientSecret: paymentIntent.client_secret });
     });
   } finally {
   }
