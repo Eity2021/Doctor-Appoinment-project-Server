@@ -59,14 +59,14 @@ async function run() {
     };
 
     // get services
-    app.get("/services", async (req, res) => {
+    app.get("/services", verifyJWT, async (req, res) => {
       const query = {};
       const cursor = servicesCollection.find(query).project({ name: 1 });
       const service = await cursor.toArray();
       res.send(service);
     });
     //available get
-    app.get("/available", async (req, res) => {
+    app.get("/available", verifyJWT, async (req, res) => {
       const date = req.query.date || "Sep 3, 2022";
       //step 1 : get all services
 
@@ -142,7 +142,7 @@ async function run() {
       res.send(updatedDoc);
     });
     //  booking post
-    app.post("/booking", async (req, res) => {
+    app.post("/booking", verifyJWT, async (req, res) => {
       const booking = req.body;
       const query = {
         treatment: booking.treatment,
